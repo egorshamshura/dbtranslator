@@ -1,2 +1,2 @@
 # dynamic-binary-translator
-Dynamic binary translator using llvm infrastructure.
+LLVM-based Dynamic Binary Translator.
