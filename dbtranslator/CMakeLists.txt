@@ -10,7 +10,7 @@ file(GLOB_RECURSE DBTRANSLATOR_SOURCE CONFIGURE_DEPENDS src/*.cpp)
 add_library(${PROJECT_NAME} ${DBTRANSLATOR_SOURCE})
 
 find_package(elfio CONFIG REQUIRED)
-find_package(LLVM REQUIRED CONFIG)
+find_package(LLVM 20.1.3 CONFIG REQUIRED)
 
 message(STATUS "Found LLVM ${LLVM_PACKAGE_VERSION}")
 message(STATUS "Using LLVMConfig.cmake in: ${LLVM_DIR}")
@@ -35,4 +35,4 @@ target_include_directories(${PROJECT_NAME} PUBLIC include/dbtranslator ${LLVM_IN
 
 file(GLOB DBTRANSLATOR_TESTS_SOURCE CONFIGURE_DEPENDS tests/*.cpp)
 add_executable("${PROJECT_NAME}-tests" ${DBTRANSLATOR_TESTS_SOURCE})
-target_link_libraries("${PROJECT_NAME}-tests" PUBLIC ${PROJECT_NAME})
+target_link_libraries("${PROJECT_NAME}-tests" PUBLIC ${PROJECT_NAME} argparse)

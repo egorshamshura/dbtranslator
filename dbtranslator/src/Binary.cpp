@@ -12,11 +12,13 @@
 namespace riscv {
 
 
-std::pair<MemoryManager*, uint32_t> parseElf(char const* FileName) {
+std::pair<MemoryManager*, uint32_t> parseElf(char const* FileName, bool Debug) {
   ELFIO::elfio Reader;
   Reader.load(FileName);
-  ELFIO::dump::segment_headers(std::cerr, Reader);
-  ELFIO::dump::segment_datas(std::cerr, Reader);
+  if (Debug) {
+    ELFIO::dump::segment_headers(std::cerr, Reader);
+    ELFIO::dump::segment_datas(std::cerr, Reader);
+  }
   MemoryManager* Result = new MemoryManager();
   Result->NumSegments = Reader.segments.size() + 1;
   Result->SegmentData = static_cast<SegmentManager*>(operator new(sizeof(SegmentManager) * (Result->NumSegments)));
@@ -35,8 +37,6 @@ std::pair<MemoryManager*, uint32_t> parseElf(char const* FileName) {
   Manager->MemorySize = 1 << 24;
   Manager->Memory = static_cast<uint8_t*>(operator new(Manager->MemorySize));
   Manager->GuestAddress = -1 - Manager->MemorySize;
-  std::cerr << "GuestAddress stack pointer " << Manager->GuestAddress << " " << Manager->GuestAddress + Manager->MemorySize << std::endl;
-  std::cerr.flush(); 
   return {Result, Reader.get_entry()};
 }
 } // end namespace riscv

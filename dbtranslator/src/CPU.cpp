@@ -26,10 +26,6 @@ void dump(CPUState* State) {
     std::cout << "R" << I << " " << State->Registers[I] << std::endl;
   }
   std::cout << "PC " << State->PC << std::endl;
-  auto X = State->Manager->SegmentData[State->Manager->NumSegments - 1];
-  for (size_t I = 0; I < 256; ++I) {
-    std::cout << static_cast<int>(*(X.Memory + X.MemorySize - I - 1)) << std::endl;
-  }
 }
 
 } // end namespace riscv

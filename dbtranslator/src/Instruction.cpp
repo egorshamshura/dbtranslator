@@ -9,6 +9,14 @@ namespace riscv {
 
 namespace {
 
+static void updatePC(IRData& Data) {
+  auto *CPUStructTy = riscv::getCPUStateType(Data.Builder.getContext());
+  auto *CPUArg = Data.CurrentFunction->getArg(0);
+  llvm::Value *PCPtr = Data.Builder.CreateStructGEP(CPUStructTy, CPUArg, 1);
+  llvm::Value *PCVal = Data.Builder.CreateLoad(Data.Builder.getInt32Ty(), PCPtr);  
+  llvm::Value *NewPCVal = Data.Builder.CreateAdd(PCVal, Data.Builder.getInt32(4));
+  Data.Builder.CreateStore(NewPCVal, PCPtr);
+}
 
 } // end anonymous namespace
   
@@ -119,10 +127,7 @@ void LUIInstruction::build_ir(IRData& Data) {
                                         {Data.Builder.getInt32(0), Data.Builder.getInt32(RegDest)});
   Data.Builder.CreateStore(Data.Builder.getInt32(Immediate), RegDestPtr);
 
-  llvm::Value *PCPtr = Data.Builder.CreateStructGEP(CPUStructTy, CPUArg, 1);
-  llvm::Value *PCVal = Data.Builder.CreateLoad(Data.Builder.getInt32Ty(), PCPtr);  
-  llvm::Value *NewPCVal = Data.Builder.CreateAdd(PCVal, Data.Builder.getInt32(4));
-  Data.Builder.CreateStore(NewPCVal, PCPtr);
+  updatePC(Data);
 }
 
 void AUIPCInstruction::build_ir(IRData& Data) {
@@ -149,7 +154,7 @@ void AUIPCInstruction::build_ir(IRData& Data) {
 void JALInstruction::build_ir(IRData& Data) {
   uint32_t RegDest = (InstructionData >> 7) & 0x1F;
 
- uint32_t Offset = ((InstructionData >> 31) & 0x1) << 20
+  uint32_t Offset = ((InstructionData >> 31) & 0x1) << 20
                 | ((InstructionData >> 12) & 0xFF) << 12
                 | ((InstructionData >> 20) & 0x1) << 11
                 | ((InstructionData >> 21) & 0x3FF) << 1;
@@ -170,7 +175,6 @@ void JALInstruction::build_ir(IRData& Data) {
   llvm::Value *PCPtr = Data.Builder.CreateStructGEP(CPUStructTy, CPUArg, 1);
   llvm::Value *PCVal = Data.Builder.CreateLoad(Data.Builder.getInt32Ty(), PCPtr);                                      
   Data.Builder.CreateStore(Data.Builder.CreateAdd(Data.Builder.getInt32(4), PCVal), RegDestPtr);
-
   Data.Builder.CreateStore(Data.Builder.CreateAdd(Data.Builder.getInt32(Offset), PCVal), PCPtr);
 }
 
@@ -441,10 +445,7 @@ void LBInstruction::build_ir(IRData& Data) {
   
   Data.Builder.CreateStore(Data.Builder.CreateSExt(ReadMemory, Data.Builder.getInt32Ty()), RegDestPtr);
   
-  llvm::Value *PCPtr = Data.Builder.CreateStructGEP(CPUStructTy, CPUArg, 1);
-  llvm::Value *PCVal = Data.Builder.CreateLoad(Data.Builder.getInt32Ty(), PCPtr);  
-  llvm::Value *NewPCVal = Data.Builder.CreateAdd(PCVal, Data.Builder.getInt32(4));
-  Data.Builder.CreateStore(NewPCVal, PCPtr);
+  updatePC(Data);
 }
 
 void LHInstruction::build_ir(IRData& Data) {
@@ -473,10 +474,7 @@ void LHInstruction::build_ir(IRData& Data) {
   
   Data.Builder.CreateStore(Data.Builder.CreateSExt(ReadMemory, Data.Builder.getInt32Ty()), RegDestPtr);
   
-  llvm::Value *PCPtr = Data.Builder.CreateStructGEP(CPUStructTy, CPUArg, 1);
-  llvm::Value *PCVal = Data.Builder.CreateLoad(Data.Builder.getInt32Ty(), PCPtr);  
-  llvm::Value *NewPCVal = Data.Builder.CreateAdd(PCVal, Data.Builder.getInt32(4));
-  Data.Builder.CreateStore(NewPCVal, PCPtr);
+  updatePC(Data);
 }
 
 void LWInstruction::build_ir(IRData& Data) {
@@ -505,10 +503,7 @@ void LWInstruction::build_ir(IRData& Data) {
   
   Data.Builder.CreateStore(Data.Builder.CreateSExt(ReadMemory, Data.Builder.getInt32Ty()), RegDestPtr);
   
-  llvm::Value *PCPtr = Data.Builder.CreateStructGEP(CPUStructTy, CPUArg, 1);
-  llvm::Value *PCVal = Data.Builder.CreateLoad(Data.Builder.getInt32Ty(), PCPtr);  
-  llvm::Value *NewPCVal = Data.Builder.CreateAdd(PCVal, Data.Builder.getInt32(4));
-  Data.Builder.CreateStore(NewPCVal, PCPtr);
+  updatePC(Data);
 }
 
 void LBUInstruction::build_ir(IRData& Data) {
@@ -537,10 +532,7 @@ void LBUInstruction::build_ir(IRData& Data) {
   
   Data.Builder.CreateStore(Data.Builder.CreateZExt(ReadMemory, Data.Builder.getInt32Ty()), RegDestPtr);
   
-  llvm::Value *PCPtr = Data.Builder.CreateStructGEP(CPUStructTy, CPUArg, 1);
-  llvm::Value *PCVal = Data.Builder.CreateLoad(Data.Builder.getInt32Ty(), PCPtr);  
-  llvm::Value *NewPCVal = Data.Builder.CreateAdd(PCVal, Data.Builder.getInt32(4));
-  Data.Builder.CreateStore(NewPCVal, PCPtr);
+  updatePC(Data);
 }
 
 void LHUInstruction::build_ir(IRData& Data) {
@@ -569,10 +561,7 @@ void LHUInstruction::build_ir(IRData& Data) {
   
   Data.Builder.CreateStore(Data.Builder.CreateZExt(ReadMemory, Data.Builder.getInt32Ty()), RegDestPtr);
   
-  llvm::Value *PCPtr = Data.Builder.CreateStructGEP(CPUStructTy, CPUArg, 1);
-  llvm::Value *PCVal = Data.Builder.CreateLoad(Data.Builder.getInt32Ty(), PCPtr);  
-  llvm::Value *NewPCVal = Data.Builder.CreateAdd(PCVal, Data.Builder.getInt32(4));
-  Data.Builder.CreateStore(NewPCVal, PCPtr);
+  updatePC(Data);
 }
 
 void SBInstruction::build_ir(IRData& Data) {
@@ -605,10 +594,7 @@ void SBInstruction::build_ir(IRData& Data) {
 
   Data.Builder.CreateCall(Data.MemoryFunctions[3], {MemoryManagerPtr, Address, RegSrc2Val});
 
-  llvm::Value *PCPtr = Data.Builder.CreateStructGEP(CPUStructTy, CPUArg, 1);
-  llvm::Value *PCVal = Data.Builder.CreateLoad(Data.Builder.getInt32Ty(), PCPtr);  
-  llvm::Value *NewPCVal = Data.Builder.CreateAdd(PCVal, Data.Builder.getInt32(4));
-  Data.Builder.CreateStore(NewPCVal, PCPtr);
+  updatePC(Data);
 }
 
 void SHInstruction::build_ir(IRData& Data) {
@@ -641,10 +627,7 @@ void SHInstruction::build_ir(IRData& Data) {
 
   Data.Builder.CreateCall(Data.MemoryFunctions[4], {MemoryManagerPtr, Address, RegSrc2Val});
 
-  llvm::Value *PCPtr = Data.Builder.CreateStructGEP(CPUStructTy, CPUArg, 1);
-  llvm::Value *PCVal = Data.Builder.CreateLoad(Data.Builder.getInt32Ty(), PCPtr);  
-  llvm::Value *NewPCVal = Data.Builder.CreateAdd(PCVal, Data.Builder.getInt32(4));
-  Data.Builder.CreateStore(NewPCVal, PCPtr);
+  updatePC(Data);
 }
 
 void SWInstruction::build_ir(IRData& Data) {
@@ -677,10 +660,7 @@ void SWInstruction::build_ir(IRData& Data) {
 
   Data.Builder.CreateCall(Data.MemoryFunctions[5], {MemoryManagerPtr, Address, RegSrc2Val});
 
-  llvm::Value *PCPtr = Data.Builder.CreateStructGEP(CPUStructTy, CPUArg, 1);
-  llvm::Value *PCVal = Data.Builder.CreateLoad(Data.Builder.getInt32Ty(), PCPtr);  
-  llvm::Value *NewPCVal = Data.Builder.CreateAdd(PCVal, Data.Builder.getInt32(4));
-  Data.Builder.CreateStore(NewPCVal, PCPtr);
+  updatePC(Data);
 }
 
 void ADDIInstruction::build_ir(IRData& Data) {
@@ -708,10 +688,7 @@ void ADDIInstruction::build_ir(IRData& Data) {
                                       {Data.Builder.getInt32(0), Data.Builder.getInt32(RegDest)});
   Data.Builder.CreateStore(Result, RegDestPtr);
 
-  llvm::Value *PCPtr = Data.Builder.CreateStructGEP(CPUStructTy, CPUArg, 1);
-  llvm::Value *PCVal = Data.Builder.CreateLoad(Data.Builder.getInt32Ty(), PCPtr);  
-  llvm::Value *NewPCVal = Data.Builder.CreateAdd(PCVal, Data.Builder.getInt32(4));
-  Data.Builder.CreateStore(NewPCVal, PCPtr);
+  updatePC(Data);
 }
 
 void SLTIInstruction::build_ir(IRData& Data) {
@@ -735,10 +712,7 @@ void SLTIInstruction::build_ir(IRData& Data) {
   llvm::Value *Cond = Data.Builder.CreateICmpSLT(SrcValue, Data.Builder.getInt32(Immediate));
   Data.Builder.CreateStore(Data.Builder.CreateZExt(Cond, Data.Builder.getInt32Ty()), RegDestPtr);
 
-  llvm::Value *PCPtr = Data.Builder.CreateStructGEP(CPUStructTy, CPUArg, 1);
-  llvm::Value *PCVal = Data.Builder.CreateLoad(Data.Builder.getInt32Ty(), PCPtr);  
-  llvm::Value *NewPCVal = Data.Builder.CreateAdd(PCVal, Data.Builder.getInt32(4));
-  Data.Builder.CreateStore(NewPCVal, PCPtr);
+  updatePC(Data);
 }
 
 void SLTIUInstruction::build_ir(IRData& Data) {
@@ -762,10 +736,7 @@ void SLTIUInstruction::build_ir(IRData& Data) {
   llvm::Value *Cond = Data.Builder.CreateICmpULT(SrcValue, Data.Builder.getInt32(Immediate));
   Data.Builder.CreateStore(Data.Builder.CreateZExt(Cond, Data.Builder.getInt32Ty()), RegDestPtr);
 
-  llvm::Value *PCPtr = Data.Builder.CreateStructGEP(CPUStructTy, CPUArg, 1);
-  llvm::Value *PCVal = Data.Builder.CreateLoad(Data.Builder.getInt32Ty(), PCPtr);  
-  llvm::Value *NewPCVal = Data.Builder.CreateAdd(PCVal, Data.Builder.getInt32(4));
-  Data.Builder.CreateStore(NewPCVal, PCPtr);
+  updatePC(Data);
 }
 
 void XORIInstruction::build_ir(IRData& Data) {
@@ -792,10 +763,7 @@ void XORIInstruction::build_ir(IRData& Data) {
                                       {Data.Builder.getInt32(0), Data.Builder.getInt32(RegDest)});
   Data.Builder.CreateStore(Result, RegDestPtr);
 
-  llvm::Value *PCPtr = Data.Builder.CreateStructGEP(CPUStructTy, CPUArg, 1);
-  llvm::Value *PCVal = Data.Builder.CreateLoad(Data.Builder.getInt32Ty(), PCPtr);  
-  llvm::Value *NewPCVal = Data.Builder.CreateAdd(PCVal, Data.Builder.getInt32(4));
-  Data.Builder.CreateStore(NewPCVal, PCPtr);
+  updatePC(Data);
 }
 
 void ORIInstruction::build_ir(IRData& Data) {
@@ -822,10 +790,7 @@ void ORIInstruction::build_ir(IRData& Data) {
                                       {Data.Builder.getInt32(0), Data.Builder.getInt32(RegDest)});
   Data.Builder.CreateStore(Result, RegDestPtr);
 
-  llvm::Value *PCPtr = Data.Builder.CreateStructGEP(CPUStructTy, CPUArg, 1);
-  llvm::Value *PCVal = Data.Builder.CreateLoad(Data.Builder.getInt32Ty(), PCPtr);  
-  llvm::Value *NewPCVal = Data.Builder.CreateAdd(PCVal, Data.Builder.getInt32(4));
-  Data.Builder.CreateStore(NewPCVal, PCPtr);
+  updatePC(Data);
 }
 
 void ANDIInstruction::build_ir(IRData& Data) {
@@ -851,10 +816,7 @@ void ANDIInstruction::build_ir(IRData& Data) {
                                       {Data.Builder.getInt32(0), Data.Builder.getInt32(RegDest)});
   Data.Builder.CreateStore(Result, RegDestPtr);
 
-  llvm::Value *PCPtr = Data.Builder.CreateStructGEP(CPUStructTy, CPUArg, 1);
-  llvm::Value *PCVal = Data.Builder.CreateLoad(Data.Builder.getInt32Ty(), PCPtr);  
-  llvm::Value *NewPCVal = Data.Builder.CreateAdd(PCVal, Data.Builder.getInt32(4));
-  Data.Builder.CreateStore(NewPCVal, PCPtr);
+  updatePC(Data);
 }
 
 void SLLIInstruction::build_ir(IRData& Data) {
@@ -877,10 +839,7 @@ void SLLIInstruction::build_ir(IRData& Data) {
                                       {Data.Builder.getInt32(0), Data.Builder.getInt32(RegDest)});
   Data.Builder.CreateStore(Result, RegDestPtr);
 
-  llvm::Value *PCPtr = Data.Builder.CreateStructGEP(CPUStructTy, CPUArg, 1);
-  llvm::Value *PCVal = Data.Builder.CreateLoad(Data.Builder.getInt32Ty(), PCPtr);  
-  llvm::Value *NewPCVal = Data.Builder.CreateAdd(PCVal, Data.Builder.getInt32(4));
-  Data.Builder.CreateStore(NewPCVal, PCPtr);
+  updatePC(Data);
 }
 
 void SRLIInstruction::build_ir(IRData& Data) {
@@ -903,10 +862,7 @@ void SRLIInstruction::build_ir(IRData& Data) {
                                       {Data.Builder.getInt32(0), Data.Builder.getInt32(RegDest)});
   Data.Builder.CreateStore(Result, RegDestPtr);
 
-  llvm::Value *PCPtr = Data.Builder.CreateStructGEP(CPUStructTy, CPUArg, 1);
-  llvm::Value *PCVal = Data.Builder.CreateLoad(Data.Builder.getInt32Ty(), PCPtr);  
-  llvm::Value *NewPCVal = Data.Builder.CreateAdd(PCVal, Data.Builder.getInt32(4));
-  Data.Builder.CreateStore(NewPCVal, PCPtr);
+  updatePC(Data);
 }
 
 void SRAIInstruction::build_ir(IRData& Data) {
@@ -929,10 +885,7 @@ void SRAIInstruction::build_ir(IRData& Data) {
                                       {Data.Builder.getInt32(0), Data.Builder.getInt32(RegDest)});
   Data.Builder.CreateStore(Result, RegDestPtr);
 
-  llvm::Value *PCPtr = Data.Builder.CreateStructGEP(CPUStructTy, CPUArg, 1);
-  llvm::Value *PCVal = Data.Builder.CreateLoad(Data.Builder.getInt32Ty(), PCPtr);  
-  llvm::Value *NewPCVal = Data.Builder.CreateAdd(PCVal, Data.Builder.getInt32(4));
-  Data.Builder.CreateStore(NewPCVal, PCPtr);
+  updatePC(Data);
 }
 
 void ADDInstruction::build_ir(IRData& Data) {
@@ -959,10 +912,7 @@ void ADDInstruction::build_ir(IRData& Data) {
                                       {Data.Builder.getInt32(0), Data.Builder.getInt32(RegDest)});
   Data.Builder.CreateStore(Result, RegDestPtr);
 
-  llvm::Value *PCPtr = Data.Builder.CreateStructGEP(CPUStructTy, CPUArg, 1);
-  llvm::Value *PCVal = Data.Builder.CreateLoad(Data.Builder.getInt32Ty(), PCPtr);  
-  llvm::Value *NewPCVal = Data.Builder.CreateAdd(PCVal, Data.Builder.getInt32(4));
-  Data.Builder.CreateStore(NewPCVal, PCPtr);
+  updatePC(Data);
 }
 
 void SUBInstruction::build_ir(IRData& Data) {
@@ -989,10 +939,7 @@ void SUBInstruction::build_ir(IRData& Data) {
                                       {Data.Builder.getInt32(0), Data.Builder.getInt32(RegDest)});
   Data.Builder.CreateStore(Result, RegDestPtr);
 
-  llvm::Value *PCPtr = Data.Builder.CreateStructGEP(CPUStructTy, CPUArg, 1);
-  llvm::Value *PCVal = Data.Builder.CreateLoad(Data.Builder.getInt32Ty(), PCPtr);  
-  llvm::Value *NewPCVal = Data.Builder.CreateAdd(PCVal, Data.Builder.getInt32(4));
-  Data.Builder.CreateStore(NewPCVal, PCPtr);
+  updatePC(Data);
 }
 
 void SLLInstruction::build_ir(IRData& Data) {
@@ -1018,10 +965,7 @@ void SLLInstruction::build_ir(IRData& Data) {
                                       {Data.Builder.getInt32(0), Data.Builder.getInt32(RegDest)});
   Data.Builder.CreateStore(Result, RegDestPtr);
 
-  llvm::Value *PCPtr = Data.Builder.CreateStructGEP(CPUStructTy, CPUArg, 1);
-  llvm::Value *PCVal = Data.Builder.CreateLoad(Data.Builder.getInt32Ty(), PCPtr);  
-  llvm::Value *NewPCVal = Data.Builder.CreateAdd(PCVal, Data.Builder.getInt32(4));
-  Data.Builder.CreateStore(NewPCVal, PCPtr);
+  updatePC(Data);
 }
 
 void SRLInstruction::build_ir(IRData& Data) {
@@ -1047,10 +991,7 @@ void SRLInstruction::build_ir(IRData& Data) {
                                       {Data.Builder.getInt32(0), Data.Builder.getInt32(RegDest)});
   Data.Builder.CreateStore(Result, RegDestPtr);
 
-  llvm::Value *PCPtr = Data.Builder.CreateStructGEP(CPUStructTy, CPUArg, 1);
-  llvm::Value *PCVal = Data.Builder.CreateLoad(Data.Builder.getInt32Ty(), PCPtr);  
-  llvm::Value *NewPCVal = Data.Builder.CreateAdd(PCVal, Data.Builder.getInt32(4));
-  Data.Builder.CreateStore(NewPCVal, PCPtr);
+  updatePC(Data);
 }
 
 void SRAInstruction::build_ir(IRData& Data) {
@@ -1076,10 +1017,7 @@ void SRAInstruction::build_ir(IRData& Data) {
                                       {Data.Builder.getInt32(0), Data.Builder.getInt32(RegDest)});
   Data.Builder.CreateStore(Result, RegDestPtr);
 
-  llvm::Value *PCPtr = Data.Builder.CreateStructGEP(CPUStructTy, CPUArg, 1);
-  llvm::Value *PCVal = Data.Builder.CreateLoad(Data.Builder.getInt32Ty(), PCPtr);  
-  llvm::Value *NewPCVal = Data.Builder.CreateAdd(PCVal, Data.Builder.getInt32(4));
-  Data.Builder.CreateStore(NewPCVal, PCPtr);
+  updatePC(Data);
 }
 
 void XORInstruction::build_ir(IRData& Data) {
@@ -1106,10 +1044,7 @@ void XORInstruction::build_ir(IRData& Data) {
                                       {Data.Builder.getInt32(0), Data.Builder.getInt32(RegDest)});
   Data.Builder.CreateStore(Result, RegDestPtr);
 
-  llvm::Value *PCPtr = Data.Builder.CreateStructGEP(CPUStructTy, CPUArg, 1);
-  llvm::Value *PCVal = Data.Builder.CreateLoad(Data.Builder.getInt32Ty(), PCPtr);  
-  llvm::Value *NewPCVal = Data.Builder.CreateAdd(PCVal, Data.Builder.getInt32(4));
-  Data.Builder.CreateStore(NewPCVal, PCPtr);
+  updatePC(Data);
 }
 
 void ORInstruction::build_ir(IRData& Data) {
@@ -1136,10 +1071,7 @@ void ORInstruction::build_ir(IRData& Data) {
                                       {Data.Builder.getInt32(0), Data.Builder.getInt32(RegDest)});
   Data.Builder.CreateStore(Result, RegDestPtr);
 
-  llvm::Value *PCPtr = Data.Builder.CreateStructGEP(CPUStructTy, CPUArg, 1);
-  llvm::Value *PCVal = Data.Builder.CreateLoad(Data.Builder.getInt32Ty(), PCPtr);  
-  llvm::Value *NewPCVal = Data.Builder.CreateAdd(PCVal, Data.Builder.getInt32(4));
-  Data.Builder.CreateStore(NewPCVal, PCPtr);
+  updatePC(Data);
 }
 
 void ANDInstruction::build_ir(IRData& Data) {
@@ -1166,10 +1098,7 @@ void ANDInstruction::build_ir(IRData& Data) {
                                       {Data.Builder.getInt32(0), Data.Builder.getInt32(RegDest)});
   Data.Builder.CreateStore(Result, RegDestPtr);
 
-  llvm::Value *PCPtr = Data.Builder.CreateStructGEP(CPUStructTy, CPUArg, 1);
-  llvm::Value *PCVal = Data.Builder.CreateLoad(Data.Builder.getInt32Ty(), PCPtr);  
-  llvm::Value *NewPCVal = Data.Builder.CreateAdd(PCVal, Data.Builder.getInt32(4));
-  Data.Builder.CreateStore(NewPCVal, PCPtr);
+  updatePC(Data);
 }
 
 void SLTInstruction::build_ir(IRData& Data) {
@@ -1193,10 +1122,7 @@ void SLTInstruction::build_ir(IRData& Data) {
   llvm::Value *Cond = Data.Builder.CreateICmpSLT(Src1Value, Src2Value);
   Data.Builder.CreateStore(Data.Builder.CreateZExt(Cond, Data.Builder.getInt32Ty()), RegDestPtr);
 
-  llvm::Value *PCPtr = Data.Builder.CreateStructGEP(CPUStructTy, CPUArg, 1);
-  llvm::Value *PCVal = Data.Builder.CreateLoad(Data.Builder.getInt32Ty(), PCPtr);  
-  llvm::Value *NewPCVal = Data.Builder.CreateAdd(PCVal, Data.Builder.getInt32(4));
-  Data.Builder.CreateStore(NewPCVal, PCPtr);  
+  updatePC(Data); 
 }
 
 void SLTUInstruction::build_ir(IRData& Data) {
@@ -1220,10 +1146,7 @@ void SLTUInstruction::build_ir(IRData& Data) {
   llvm::Value *Cond = Data.Builder.CreateICmpULT(Src1Value, Src2Value);
   Data.Builder.CreateStore(Data.Builder.CreateZExt(Cond, Data.Builder.getInt32Ty()), RegDestPtr);
 
-  llvm::Value *PCPtr = Data.Builder.CreateStructGEP(CPUStructTy, CPUArg, 1);
-  llvm::Value *PCVal = Data.Builder.CreateLoad(Data.Builder.getInt32Ty(), PCPtr);  
-  llvm::Value *NewPCVal = Data.Builder.CreateAdd(PCVal, Data.Builder.getInt32(4));
-  Data.Builder.CreateStore(NewPCVal, PCPtr);  
+  updatePC(Data);
 }
 
 void FENCEInstruction::build_ir(IRData& Data) {
@@ -1231,30 +1154,21 @@ void FENCEInstruction::build_ir(IRData& Data) {
   auto *RegsArrTy   = llvm::ArrayType::get(llvm::Type::getInt32Ty(Data.Builder.getContext()), 32);
   auto *CPUArg      = Data.CurrentFunction->getArg(0);
 
-  llvm::Value *PCPtr = Data.Builder.CreateStructGEP(CPUStructTy, CPUArg, 1);
-  llvm::Value *PCVal = Data.Builder.CreateLoad(Data.Builder.getInt32Ty(), PCPtr);  
-  llvm::Value *NewPCVal = Data.Builder.CreateAdd(PCVal, Data.Builder.getInt32(4));
-  Data.Builder.CreateStore(NewPCVal, PCPtr); 
+  updatePC(Data);
 }
 void FENCETSOInstruction::build_ir(IRData& Data) {
   auto *CPUStructTy = riscv::getCPUStateType(Data.Builder.getContext());
   auto *RegsArrTy   = llvm::ArrayType::get(llvm::Type::getInt32Ty(Data.Builder.getContext()), 32);
   auto *CPUArg      = Data.CurrentFunction->getArg(0);
 
-  llvm::Value *PCPtr = Data.Builder.CreateStructGEP(CPUStructTy, CPUArg, 1);
-  llvm::Value *PCVal = Data.Builder.CreateLoad(Data.Builder.getInt32Ty(), PCPtr);  
-  llvm::Value *NewPCVal = Data.Builder.CreateAdd(PCVal, Data.Builder.getInt32(4));
-  Data.Builder.CreateStore(NewPCVal, PCPtr); 
+  updatePC(Data); 
 }
 void PAUSEInstruction::build_ir(IRData& Data) {
   auto *CPUStructTy = riscv::getCPUStateType(Data.Builder.getContext());
   auto *RegsArrTy   = llvm::ArrayType::get(llvm::Type::getInt32Ty(Data.Builder.getContext()), 32);
   auto *CPUArg      = Data.CurrentFunction->getArg(0);
 
-  llvm::Value *PCPtr = Data.Builder.CreateStructGEP(CPUStructTy, CPUArg, 1);
-  llvm::Value *PCVal = Data.Builder.CreateLoad(Data.Builder.getInt32Ty(), PCPtr);  
-  llvm::Value *NewPCVal = Data.Builder.CreateAdd(PCVal, Data.Builder.getInt32(4));
-  Data.Builder.CreateStore(NewPCVal, PCPtr); 
+  updatePC(Data);
 }
 void ECALLInstruction::build_ir(IRData& Data) {}
 void EBREAKInstruction::build_ir(IRData& Data) {
@@ -1262,10 +1176,7 @@ void EBREAKInstruction::build_ir(IRData& Data) {
   auto *RegsArrTy   = llvm::ArrayType::get(llvm::Type::getInt32Ty(Data.Builder.getContext()), 32);
   auto *CPUArg      = Data.CurrentFunction->getArg(0);
 
-  llvm::Value *PCPtr = Data.Builder.CreateStructGEP(CPUStructTy, CPUArg, 1);
-  llvm::Value *PCVal = Data.Builder.CreateLoad(Data.Builder.getInt32Ty(), PCPtr);  
-  llvm::Value *NewPCVal = Data.Builder.CreateAdd(PCVal, Data.Builder.getInt32(4));
-  Data.Builder.CreateStore(NewPCVal, PCPtr); 
+  updatePC(Data);
 }
 
 namespace {

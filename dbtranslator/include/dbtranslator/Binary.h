@@ -6,7 +6,7 @@
 namespace riscv {
 
 
-std::pair<MemoryManager*, uint32_t> parseElf(char const* FileName);
+std::pair<MemoryManager*, uint32_t> parseElf(char const* FileName, bool Debug);
 
 } // end namespace riscv
 

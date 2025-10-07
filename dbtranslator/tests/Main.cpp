@@ -1,6 +1,7 @@
 #include <cstdint>
 #include <cstdlib>
 #include <iostream>
+#include <llvm/Support/Error.h>
 #include <llvm/IR/BasicBlock.h>
 #include <llvm/IR/Function.h>
 #include <llvm/IR/Type.h>
@@ -14,7 +15,6 @@
 #include <llvm/ExecutionEngine/ExecutionEngine.h>
 #include <llvm/ExecutionEngine/GenericValue.h>
 #include <string>
-#include <sys/types.h>
 #include <unordered_map>
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/LLVMContext.h"
@@ -26,6 +26,7 @@
 #include "llvm/Transforms/InstCombine/InstCombine.h"
 #include "llvm/Transforms/Scalar.h"
 #include "llvm/Transforms/Scalar/GVN.h"
+#include <argparse/argparse.hpp>
 
 #include "Binary.h"
 #include "CPU.h"
@@ -34,8 +35,6 @@
 
 using namespace llvm;
 using namespace llvm::orc;
-
-static constexpr size_t THRESHOLD = 16;
 
 static ThreadSafeModule optimizeModuleSimple(ThreadSafeModule TSM) {
   TSM.withModuleDo([](Module &M) {
@@ -72,7 +71,7 @@ static void addMemoryInterface(riscv::IRData& Data) {
   Data.MemoryFunctions[5] = M.getOrInsertFunction("write32", Write32Ty);
 }
 
-static std::string generateFunc(riscv::CPUState const* State, std::unordered_map<uint32_t, std::string>& PCToFunc, LLJIT& JIT) {
+static Expected<std::string> generateFunc(riscv::CPUState const* State, std::unordered_map<uint32_t, std::string>& PCToFunc, LLJIT& JIT, size_t Threshold, bool DebugMode) {
 
   auto CtxPtr = std::make_unique<LLVMContext>();
   auto MPtr   = std::make_unique<Module>("Module " + std::to_string(State->PC), *CtxPtr);
@@ -99,11 +98,10 @@ static std::string generateFunc(riscv::CPUState const* State, std::unordered_map
   bool Continue = true;
   uint32_t TempPC = State->PC;
   int NumInstrs = 0;
-  while (Continue && NumInstrs < THRESHOLD) {
+  while (Continue && NumInstrs < Threshold) {
     uint32_t InstructionData = riscv::read32(State->Manager, TempPC);
     TempPC += 4;
     riscv::Instr CurrentInstruction = riscv::decode(InstructionData);
-    std::cout << riscv::InstrToLiteral(CurrentInstruction) << std::endl;
     riscv::generate(CurrentInstruction, InstructionData, IRData_);
     ++NumInstrs;
     switch (CurrentInstruction) {
@@ -125,19 +123,50 @@ static std::string generateFunc(riscv::CPUState const* State, std::unordered_map
   ThreadSafeModule TSM(std::move(MPtr), std::move(CtxPtr));
   TSM = optimizeModuleSimple(std::move(TSM));
 
-  TSM.getModuleUnlocked()->dump();
+  if (DebugMode) TSM.getModuleUnlocked()->dump();
   if (auto Err = JIT.addIRModule(std::move(TSM))) {
-    logAllUnhandledErrors(std::move(Err), errs(), "Error adding module: ");
-    exit(200);
+    return Err;
   }
   return FuncName;
 }
 
+static Expected<std::unique_ptr<LLJIT>> initializeLLJIT(StringRef ELFFile) {
+  auto JITOrErr = LLJITBuilder().create();
+  if (!JITOrErr) {
+    return std::move(JITOrErr);
+  }
+  auto JIT = std::move(*JITOrErr);
+  
+  auto CtxPtr = std::make_unique<LLVMContext>();
+  SMDiagnostic Err;
+  auto M = parseIRFile(ELFFile, Err, *CtxPtr);
+
+  ThreadSafeModule TSM(std::move(M), std::move(CtxPtr));
+  TSM = optimizeModuleSimple(std::move(TSM));
+
+  if (auto Err = JIT->addIRModule(std::move(TSM))) {
+    return std::move(Err);
+  }
+  return JIT;
+} 
+
 int main(int argc, char** argv) {
-  if (argc != 3) {
-    std::printf("Usage: %s <path-to-elf> <path-to-memory-impl>.\n", argv[0]);
+  argparse::ArgumentParser program("dbtranslator");
+  program.add_argument("--debug").help("show debug output").flag();
+  program.add_argument("--threshold").default_value(64).help("specify threshold value").metavar("value");
+  program.add_argument("--input-elf").required().help("specify the input elf file").metavar("file_name");
+  program.add_argument("--memory-impl").required().help("specify memory implementation").metavar("file_name");
+
+
+  try {
+    program.parse_args(argc, argv);
+  } catch (const std::exception& err) {
+    std::cerr << err.what() << std::endl;
+    std::cerr << program;
     return EXIT_FAILURE;
   }
+
+  bool DebugMode = program["--debug"] == true;
 
   InitLLVM X(argc, argv);
   InitializeNativeTarget();
@@ -146,44 +175,35 @@ int main(int argc, char** argv) {
 
   using BlockFunc = void(*)(riscv::CPUState*);
 
-  auto JITOrErr = LLJITBuilder().create();
+  auto JITOrErr = initializeLLJIT(program.get<std::string>("--memory-impl"));
   if (!JITOrErr) {
-    std::printf("Error creating JIT.\n");
+    logAllUnhandledErrors(JITOrErr.takeError(), errs());
     return EXIT_FAILURE;
   }
   auto JIT = std::move(*JITOrErr);
-  
-  auto CtxPtr = std::make_unique<LLVMContext>();
-  SMDiagnostic Err;
-  auto M = parseIRFile(argv[2], Err, *CtxPtr);
-
-  ThreadSafeModule TSM(std::move(M), std::move(CtxPtr));
-  TSM = optimizeModuleSimple(std::move(TSM));
-
-  TSM.getModuleUnlocked()->dump();
-  if (auto Err = JIT->addIRModule(std::move(TSM))) {
-    logAllUnhandledErrors(std::move(Err), errs(), "Error adding module: ");
-    return EXIT_FAILURE;
-  }
 
   riscv::MemoryManager* Manager;
   uint32_t EntryPoint;
 
-  std::tie(Manager, EntryPoint) = riscv::parseElf(argv[1]);
-  riscv::CPUState state{{}, EntryPoint, Manager};
-  state.Registers[2] = -16;
+  std::string ElfFile = program.get<std::string>("--input-elf");
+  std::tie(Manager, EntryPoint) = riscv::parseElf(ElfFile.c_str(), DebugMode);
+  riscv::CPUState State{{}, EntryPoint, Manager};
+  State.Registers[2] = -16;
 
   std::unordered_map<uint32_t, std::string> PCToFunc;
-  int i = 100;
-  while (i > 0) {
-    auto FuncIt = PCToFunc.find(state.PC);
+  while (true) {
+    auto FuncIt = PCToFunc.find(State.PC);
     if (FuncIt == PCToFunc.end()) {
-      PCToFunc.insert({state.PC, generateFunc(&state, PCToFunc, *JIT.get())});
+      auto GeneratedFuncName = generateFunc(&State, PCToFunc, *JIT.get(), program.get<int>("--threshold"), DebugMode);
+      if (!GeneratedFuncName) {
+        logAllUnhandledErrors(GeneratedFuncName.takeError(), errs());
+        return EXIT_FAILURE;
+      }
+      PCToFunc.insert({State.PC, GeneratedFuncName.get()});
     }
-    BlockFunc Fn = JIT->lookup(PCToFunc[state.PC])->toPtr<BlockFunc>();
-    Fn(&state);
-    --i;
+    BlockFunc Fn = JIT->lookup(PCToFunc[State.PC])->toPtr<BlockFunc>();
+    Fn(&State);
+    if (DebugMode) riscv::dump(&State);
   }
-  riscv::dump(&state);
   return 0;
 }
